@@ -7,10 +7,20 @@ Command-line interface for [SnapDB](https://github.com/hussain-alsaibai/snapdb) 
 ## Install
 
 ```bash
-pip install snapdb        # the library
-# then use the CLI directly — it is a single file, no dependencies of its own
+# The library is imported as `snapdb` but distributed as `pysnapdb`.
+# Do not `pip install snapdb` — that name on PyPI is a different project.
+pip install pysnapdb
+
+# The CLI itself is a single file with no dependencies of its own
 curl -O https://raw.githubusercontent.com/hussain-alsaibai/snapdb-cli/main/snapdb_cli.py
 chmod +x snapdb_cli.py
+```
+
+The PyPI release of `pysnapdb` (0.14.0) lags the repository (0.18.0). This CLI
+is tested against the repository, which is where the API it uses lives:
+
+```bash
+pip install "git+https://github.com/hussain-alsaibai/snapdb.git"
 ```
 
 ## Schema syntax

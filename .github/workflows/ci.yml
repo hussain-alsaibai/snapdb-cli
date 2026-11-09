@@ -6,6 +6,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  # The library is imported as `snapdb` but distributed as `pysnapdb`, and the
+  # PyPI release (0.14.0) lags the repository (0.18.0). Installing the
+  # repository, not the wheel, is what makes these tests meaningful: the CLI
+  # was written against an API that no longer exists, and a stale wheel would
+  # have hidden that.
+  SNAPDB_REPO: https://github.com/hussain-alsaibai/snapdb.git
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,13 +29,28 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install snapdb and pytest
+      - name: Install snapdb from source and pytest
         run: |
+          set -e
           python -m pip install --upgrade pip
-          python -m pip install pytest snapdb
+          python -m pip install pytest
+          python -m pip install "git+${SNAPDB_REPO}"
 
-      - name: Show the snapdb version under test
-        run: python -c "import snapdb, sys; print(sys.version); print('snapdb', getattr(snapdb, '__version__', 'unknown'))"
+      - name: Prove the import is the repo version, not a stray wheel
+        run: |
+          set -e
+          python - <<'PY'
+          import subprocess, sys
+          import snapdb
+          actual = getattr(snapdb, "__version__", "unknown")
+          expected = subprocess.run(
+              [sys.executable, "-m", "pip", "show", "pysnapdb"],
+              capture_output=True, text=True,
+          ).stdout
+          print("import: snapdb", actual)
+          assert "pysnapdb" in expected, expected
+          assert actual != "unknown", "snapdb imported but declared no version"
+          PY
 
       - name: Run tests
         run: python -m pytest -q
@@ -44,10 +67,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install snapdb
+      - name: Install snapdb from source
         run: |
+          set -e
           python -m pip install --upgrade pip
-          python -m pip install snapdb
+          python -m pip install "git+${SNAPDB_REPO}"
 
       - name: Run every command in the README quick start
         run: |
@@ -66,3 +90,13 @@ jobs:
           # Exporting must round-trip through a JSON parser, not just print.
           python snapdb_cli.py export users --format json $D > out.json
           python -c "import json;d=json.load(open('out.json'));assert len(d)==2, d;print('round-trip ok:', len(d), 'rows')"
+
+      - name: Assert the README install block names the real package
+        run: |
+          set -e
+          # `pip install snapdb` fetches an unrelated PyPI project. The README
+          # must not tell users to do that.
+          if grep -nE '^\s*pip install snapdb\s*$' README.md; then
+            echo "::error::README tells users to 'pip install snapdb', which is a different project on PyPI"
+            exit 1
+          fi
