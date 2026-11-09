@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install snapdb and pytest
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest snapdb
+
+      - name: Show the snapdb version under test
+        run: python -c "import snapdb, sys; print(sys.version); print('snapdb', getattr(snapdb, '__version__', 'unknown'))"
+
+      - name: Run tests
+        run: python -m pytest -q
+
+  readme-examples:
+    # The README is the only documentation this CLI has, and before 2026-11-09
+    # every command in it failed. This job runs the documented walkthrough
+    # verbatim so a doc that drifts from the code fails CI instead of a user.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install snapdb
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install snapdb
+
+      - name: Run every command in the README quick start
+        run: |
+          set -e
+          D="--path ./demo"
+          mkdir -p demo
+          python snapdb_cli.py init users id:i32,name:bytes:16,email:bytes:32 $D
+          python snapdb_cli.py insert users '{"id": 1, "name": "alice", "email": "alice@example.com"}' $D
+          python snapdb_cli.py insert users '{"id": 2, "name": "bob", "email": "bob@example.com"}' $D
+          python snapdb_cli.py get users 0 $D
+          python snapdb_cli.py list users --limit 100 $D
+          python snapdb_cli.py count users $D
+          python snapdb_cli.py schema users $D
+          python snapdb_cli.py stats users $D
+          python snapdb_cli.py export users --format json $D
+          # Exporting must round-trip through a JSON parser, not just print.
+          python snapdb_cli.py export users --format json $D > out.json
+          python -c "import json;d=json.load(open('out.json'));assert len(d)==2, d;print('round-trip ok:', len(d), 'rows')"
